@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:;"
+  />
+  <title>Deyon</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="titlebar">
+      <div class="brand">
+        <span class="brand-mark">D</span>
+        <span class="brand-name">Deyon</span>
+      </div>
+      <div class="engine-status" id="engine-status">
+        <span class="dot" id="engine-dot"></span>
+        <span id="engine-text">Starting engine…</span>
+      </div>
+      <div class="titlebar-actions">
+        <button class="btn btn-primary" id="btn-add">Add Download</button>
+        <button class="btn btn-ghost" id="btn-settings">Settings</button>
+      </div>
+    </header>
+
+    <nav class="tabs" id="tabs">
+      <button class="tab active" data-tab="all">All</button>
+      <button class="tab" data-tab="active">Downloading</button>
+      <button class="tab" data-tab="waiting">Queued</button>
+      <button class="tab" data-tab="stopped">Completed</button>
+      <button class="tab" data-tab="error">Errors</button>
+    </nav>
+
+    <div class="stats-bar" id="stats-bar">
+      <span id="stat-down">↓ 0 B/s</span>
+      <span id="stat-up">↑ 0 B/s</span>
+      <span id="stat-active">0 active</span>
+    </div>
+
+    <main class="list" id="list">
+      <div class="empty-state" id="empty-state">
+        <p>No downloads yet.</p>
+        <p class="muted">Click "Add Download" and paste any link — HTTP, FTP, SFTP, or a magnet link.</p>
+      </div>
+    </main>
+  </div>
+
+  <!-- Add Download Modal -->
+  <div class="modal-overlay hidden" id="add-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Add Download</h2>
+        <button class="icon-btn" data-close="add-modal">✕</button>
+      </div>
+      <div class="modal-body">
+        <label class="field-label">Links (one per line — http, https, ftp, sftp, magnet)</label>
+        <textarea id="add-urls" rows="6" placeholder="https://example.com/file.zip
+magnet:?xt=urn:btih:..."></textarea>
+
+        <div class="drop-zone" id="drop-zone">
+          Drop a .torrent or .metalink file here, or
+          <button class="link-btn" id="btn-pick-file">choose a file</button>
+        </div>
+        <div id="picked-files" class="picked-files"></div>
+
+        <details class="advanced-details">
+          <summary>Per-download options (optional overrides)</summary>
+          <div class="grid-2">
+            <div class="field">
+              <label>Save to folder</label>
+              <div class="input-with-button">
+                <input type="text" id="opt-dir" placeholder="Use default download folder" />
+                <button class="btn btn-ghost" id="btn-pick-dir">Browse</button>
+              </div>
+            </div>
+            <div class="field">
+              <label>Rename output file</label>
+              <input type="text" id="opt-out" placeholder="Leave blank to keep original name" />
+            </div>
+            <div class="field">
+              <label>Connections per server (1–16)</label>
+              <input type="number" id="opt-connections" min="1" max="16" placeholder="Use default" />
+            </div>
+            <div class="field">
+              <label>Split / segments (1–16)</label>
+              <input type="number" id="opt-split" min="1" max="16" placeholder="Use default" />
+            </div>
+            <div class="field">
+              <label>Max download speed (e.g. 500K, 2M)</label>
+              <input type="text" id="opt-speed-limit" placeholder="Unlimited" />
+            </div>
+            <div class="field">
+              <label>Referer</label>
+              <input type="text" id="opt-referer" placeholder="Optional" />
+            </div>
+          </div>
+        </details>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" data-close="add-modal">Cancel</button>
+        <button class="btn btn-primary" id="btn-confirm-add">Start Download</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal-overlay hidden" id="settings-modal">
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <h2>Settings</h2>
+        <button class="icon-btn" data-close="settings-modal">✕</button>
+      </div>
+      <div class="modal-body settings-body">
+        <section class="settings-section">
+          <h3>General</h3>
+          <div class="grid-2">
+            <div class="field">
+              <label>Default download folder</label>
+              <div class="input-with-button">
+                <input type="text" id="s-downloadDir" />
+                <button class="btn btn-ghost" id="btn-pick-settings-dir">Browse</button>
+              </div>
+            </div>
+            <div class="field">
+              <label>File allocation</label>
+              <select id="s-fileAllocation">
+                <option value="none">none</option>
+                <option value="prealloc">prealloc</option>
+                <option value="falloc">falloc (Linux only)</option>
+                <option value="trunc">trunc</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h3>Speed &amp; Connections</h3>
+          <div class="grid-2">
+            <div class="field">
+              <label>Max concurrent downloads</label>
+              <input type="number" id="s-maxConcurrentDownloads" min="1" max="50" />
+            </div>
+            <div class="field">
+              <label>Connections per server (default, max 16)</label>
+              <input type="number" id="s-maxConnectionsPerServer" min="1" max="16" />
+            </div>
+            <div class="field">
+              <label>Split / segments (default, max 16)</label>
+              <input type="number" id="s-split" min="1" max="16" />
+            </div>
+            <div class="field">
+              <label>Min split size (e.g. 20M, 1M)</label>
+              <input type="text" id="s-minSplitSize" />
+            </div>
+            <div class="field">
+              <label>Max overall download speed (0 = unlimited)</label>
+              <input type="text" id="s-maxOverallDownloadLimit" />
+            </div>
+            <div class="field">
+              <label>Max overall upload speed (0 = unlimited)</label>
+              <input type="text" id="s-maxOverallUploadLimit" />
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h3>Network</h3>
+          <div class="grid-2">
+            <div class="field">
+              <label>Max tries per download (0 = infinite)</label>
+              <input type="number" id="s-maxTries" min="0" max="100" />
+            </div>
+            <div class="field">
+              <label>Retry wait (seconds)</label>
+              <input type="number" id="s-retryWait" min="0" max="600" />
+            </div>
+            <div class="field">
+              <label>Custom User-Agent</label>
+              <input type="text" id="s-userAgent" placeholder="Default: aria2" />
+            </div>
+            <div class="field">
+              <label>HTTP/HTTPS/FTP proxy (all-proxy)</label>
+              <input type="text" id="s-allProxy" placeholder="http://user:pass@host:port" />
+            </div>
+            <div class="field checkbox-field">
+              <label><input type="checkbox" id="s-checkCertificate" /> Verify TLS certificates</label>
+            </div>
+            <div class="field checkbox-field">
+              <label><input type="checkbox" id="s-continueDownload" /> Resume partial downloads by default</label>
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h3>BitTorrent</h3>
+          <div class="grid-2">
+            <div class="field checkbox-field">
+              <label><input type="checkbox" id="s-enableDht" /> Enable DHT (trackerless torrents)</label>
+            </div>
+            <div class="field">
+              <label>Max peers per torrent (0 = unlimited)</label>
+              <input type="number" id="s-btMaxPeers" min="0" max="500" />
+            </div>
+            <div class="field">
+              <label>Seed ratio (0 = don't seed)</label>
+              <input type="number" step="0.1" id="s-seedRatio" min="0" max="20" />
+            </div>
+            <div class="field">
+              <label>Seed time, minutes (0 = stop after download)</label>
+              <input type="number" id="s-seedTime" min="0" max="100000" />
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h3>Advanced</h3>
+          <p class="muted">
+            Extra aria2 command-line options, applied on engine restart. One flag per line or space-separated,
+            e.g. <code>--disable-ipv6=true</code>. See the
+            <a href="#" data-external="https://aria2.github.io/manual/en/html/aria2c.html#options">aria2 manual</a>.
+          </p>
+          <textarea id="s-extraArgs" rows="3" placeholder="--disable-ipv6=true --summary-interval=5"></textarea>
+        </section>
+      </div>
+      <div class="modal-footer">
+        <span class="muted" id="settings-hint"></span>
+        <button class="btn btn-ghost" data-close="settings-modal">Cancel</button>
+        <button class="btn btn-primary" id="btn-save-settings">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-stack" id="toast-stack"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

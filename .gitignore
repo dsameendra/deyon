@@ -1,0 +1,8 @@
+node_modules/
+dist/
+release/
+.tmp-aria2-win/
+resources/bin/
+resources/certs/
+*.log
+.DS_Store
