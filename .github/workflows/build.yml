@@ -39,6 +39,42 @@ jobs:
         if: matrix.platform == 'win'
         run: node scripts/fetch-aria2-windows.mjs
 
+      - name: Smoke-test bundled aria2c (macOS)
+        if: matrix.platform == 'mac'
+        run: |
+          otool -l resources/bin/mac/aria2c | grep -A4 LC_BUILD_VERSION
+          resources/bin/mac/aria2c --version | grep Libraries
+          mkdir -p "$RUNNER_TEMP/aria2-smoke"
+          touch "$RUNNER_TEMP/aria2-smoke/s.session"
+          resources/bin/mac/aria2c \
+            --stop-with-process=$$ \
+            --dir="$RUNNER_TEMP/aria2-smoke" \
+            --save-session="$RUNNER_TEMP/aria2-smoke/s.session" \
+            --input-file="$RUNNER_TEMP/aria2-smoke/s.session" \
+            --dht-file-path="$RUNNER_TEMP/aria2-smoke/dht.dat" \
+            --ca-certificate=resources/certs/cacert.pem \
+            https://raw.githubusercontent.com/aria2/aria2/master/README.rst
+          test -s "$RUNNER_TEMP/aria2-smoke/README.rst"
+
+      - name: Smoke-test bundled aria2c (Windows)
+        if: matrix.platform == 'win'
+        shell: pwsh
+        run: |
+          $bin = "resources/bin/win/aria2c.exe"
+          & $bin --version | Select-String "Libraries"
+          $dir = "$env:RUNNER_TEMP/aria2-smoke"
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          New-Item -ItemType File -Force -Path "$dir/s.session" | Out-Null
+          & $bin `
+            --stop-with-process=$PID `
+            --dir="$dir" `
+            --save-session="$dir/s.session" `
+            --input-file="$dir/s.session" `
+            --dht-file-path="$dir/dht.dat" `
+            https://raw.githubusercontent.com/aria2/aria2/master/README.rst
+          if ($LASTEXITCODE -ne 0) { throw "aria2c smoke test failed with exit code $LASTEXITCODE" }
+          if (-not (Test-Path "$dir/README.rst")) { throw "aria2c did not produce the expected file" }
+
       - name: Package app (macOS)
         if: matrix.platform == 'mac'
         run: npx electron-builder --mac --publish never
@@ -46,6 +82,10 @@ jobs:
       - name: Package app (Windows)
         if: matrix.platform == 'win'
         run: npx electron-builder --win --publish never
+
+      - name: Verify packaged app signature (macOS)
+        if: matrix.platform == 'mac'
+        run: codesign --verify --deep --strict --verbose=2 release/mac-arm64/Deyon.app
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

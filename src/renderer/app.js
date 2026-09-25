@@ -223,6 +223,7 @@ function createRow(item) {
 }
 
 function updateRow(row, item) {
+  row._item = item; // always refresh so action handlers see current data (e.g. files[0].path)
   const total = Number(item.totalLength) || 0;
   const completed = Number(item.completedLength) || 0;
   const pct = total > 0 ? Math.min(100, (completed / total) * 100) : (item.status === 'complete' ? 100 : 0);
@@ -259,38 +260,42 @@ function updateRow(row, item) {
   // in-flight click isn't invalidated by an unrelated poll tick.
   if (row.dataset.status !== item.status) {
     row.dataset.status = item.status;
-    row.querySelector('.row-actions').replaceChildren(...buildActions(item));
+    row.querySelector('.row-actions').replaceChildren(...buildActions(row));
   }
 }
 
-function buildActions(item) {
+// Handlers read `row._item` at click time (not a captured `item`) since the
+// row element persists across polls but its data keeps changing underneath.
+function buildActions(row) {
   const buttons = [];
+  const gid = row.dataset.gid;
+  const status = row._item.status;
 
   buttons.push(actionButton('folder', 'Open folder', withErrorToast(async () => {
-    const f = item.files && item.files[0];
+    const f = row._item.files && row._item.files[0];
     if (f && f.path) window.deyon.showInFolder(f.path);
   })));
 
-  if (item.status === 'active') {
+  if (status === 'active') {
     buttons.push(actionButton('pause', 'Pause', withErrorToast(async () => {
-      await window.deyon.aria2Call('pause', [item.gid]);
+      await window.deyon.aria2Call('pause', [gid]);
       poll();
     })));
-  } else if (item.status === 'paused') {
+  } else if (status === 'paused') {
     buttons.push(actionButton('play', 'Resume', withErrorToast(async () => {
-      await window.deyon.aria2Call('unpause', [item.gid]);
+      await window.deyon.aria2Call('unpause', [gid]);
       poll();
     })));
   }
 
-  if (item.status === 'active' || item.status === 'paused' || item.status === 'waiting') {
+  if (status === 'active' || status === 'paused' || status === 'waiting') {
     buttons.push(actionButton('remove', 'Remove', withErrorToast(async () => {
-      await window.deyon.aria2Call('remove', [item.gid]);
+      await window.deyon.aria2Call('remove', [gid]);
       poll();
     })));
   } else {
     buttons.push(actionButton('remove', 'Clear', withErrorToast(async () => {
-      await window.deyon.aria2Call('removeDownloadResult', [item.gid]);
+      await window.deyon.aria2Call('removeDownloadResult', [gid]);
       poll();
     })));
   }

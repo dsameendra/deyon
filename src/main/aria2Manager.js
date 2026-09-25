@@ -127,12 +127,18 @@ class Aria2Manager {
     const bin = resolveBinaryPath();
     const args = this.buildArgs(settings);
 
+    this._stderrTail = '';
+    this._exited = false;
+
     this.proc = spawn(bin, args, { windowsHide: true });
     this.proc.stdout.on('data', () => {});
-    this.proc.stderr.on('data', () => {});
+    this.proc.stderr.on('data', (d) => {
+      this._stderrTail = (this._stderrTail + d.toString()).slice(-2000);
+    });
 
     this.proc.on('exit', (code, signal) => {
       this.ready = false;
+      this._exited = true;
       if (!this._stopping) {
         console.error(`aria2c exited unexpectedly (code=${code}, signal=${signal})`);
       }
@@ -149,6 +155,9 @@ class Aria2Manager {
   async _waitUntilReady(timeoutMs = 10000) {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
+      if (this._exited) {
+        throw new Error(`aria2c exited before RPC became ready. stderr: ${this._stderrTail || '(empty)'}`);
+      }
       try {
         await this.call('getVersion', []);
         return;
@@ -156,7 +165,7 @@ class Aria2Manager {
         await new Promise((r) => setTimeout(r, 200));
       }
     }
-    throw new Error('aria2 RPC did not become ready in time');
+    throw new Error(`aria2 RPC did not become ready in time. stderr: ${this._stderrTail || '(empty)'}`);
   }
 
   call(method, params = []) {

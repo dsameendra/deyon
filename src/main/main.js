@@ -74,8 +74,13 @@ function registerIpcHandlers() {
 
     if (needsRestart) {
       sendEngineStatus({ state: 'restarting' });
-      await aria2.restart(currentSettings);
-      sendEngineStatus({ state: 'ready' });
+      try {
+        await aria2.restart(currentSettings);
+        sendEngineStatus({ state: 'ready' });
+      } catch (err) {
+        sendEngineStatus({ state: 'error', message: err.message });
+        throw err;
+      }
     } else {
       try {
         await aria2.call('changeGlobalOption', [
@@ -124,7 +129,7 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle('shell:show-in-folder', async (_event, filePath) => {
-    shell.showItemInFolder(filePath);
+    shell.showItemInFolder(path.normalize(filePath));
   });
 
   ipcMain.handle('shell:open-external', async (_event, url) => {

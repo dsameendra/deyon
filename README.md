@@ -6,7 +6,7 @@ or a BitTorrent magnet link — or drop in a `.torrent`/`.metalink` file, and
 Deyon downloads it through a bundled, self-contained `aria2c` engine. No
 separate aria2 install required.
 
-Built with Electron. Ships for macOS (Apple Silicon) and Windows (x64).
+Built with Electron. Ships for macOS (Apple Silicon, macOS 26+) and Windows (x64).
 
 ## Features
 
@@ -25,7 +25,7 @@ Built with Electron. Ships for macOS (Apple Silicon) and Windows (x64).
 
 Grab the latest build from the [Releases](../../releases) page:
 
-- **macOS (Apple Silicon):** `Deyon-<version>-arm64.dmg`
+- **macOS (Apple Silicon, macOS 26 "Tahoe" or newer):** `Deyon-<version>-arm64.dmg`
 - **Windows (x64):** `Deyon-Setup-<version>.exe` (installer) or the portable `.exe`
 
 ### Unsigned builds — first-run steps
@@ -47,16 +47,23 @@ Then open it normally.
 **Windows:** SmartScreen will show "Windows protected your PC." Click
 **More info** → **Run anyway**.
 
-The bundled `aria2c` for macOS is built from Homebrew's current bottle at
-release time, which targets a recent macOS version. If the app won't launch
-on an older macOS, that's why — check `.github/workflows/build.yml`'s run
-log for the exact minimum, or build your own `resources/bin/mac/aria2c` from
-source for older targets.
+The bundled `aria2c` for macOS is built from Homebrew's current bottle on
+GitHub's `macos-latest` runner at release time, which currently means
+**macOS 26 (Tahoe) or newer**. On an older macOS, the app window opens fine
+but shows "Engine error" instead of "Engine ready", because the bundled
+`aria2c` fails to load — it does not fail to launch. The CI run's "Smoke-test
+bundled aria2c (macOS)" step logs the exact `minos` value for each release.
+For older macOS, build your own `resources/bin/mac/aria2c` from source
+instead of the Homebrew bottle.
 
 ## Development
 
-Requires Node.js 20+. On macOS, also install [Homebrew](https://brew.sh) (used
-to fetch aria2 for local development and to build the bundled binary).
+Requires Node.js 20 or 22 (LTS). Node 24+ has a bug in `extract-zip` that
+silently truncates Electron's own binary download — if `npm start` launches
+nothing and `node_modules/electron/dist/` is a few hundred KB instead of a
+few hundred MB, switch to an LTS Node version and reinstall. On macOS, also
+install [Homebrew](https://brew.sh) (used to fetch aria2 for local
+development and to build the bundled binary).
 
 ```sh
 npm install
