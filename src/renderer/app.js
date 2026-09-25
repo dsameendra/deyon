@@ -252,7 +252,7 @@ function updateRow(row, item) {
   row.querySelector('.row-meta').textContent = metaParts.join('  ·  ');
 
   const fill = row.querySelector('.row-progress-fill');
-  fill.style.width = `${pct}%`;
+  fill.style.transform = `scaleX(${pct / 100})`;
   fill.classList.toggle('done', item.status === 'complete');
   fill.classList.toggle('error', item.status === 'error');
 
