@@ -7,6 +7,7 @@ const settingsStore = require('./settingsStore');
 let mainWindow = null;
 let aria2 = null;
 let currentSettings = null;
+let engineStatus = { state: 'starting' };
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -31,6 +32,7 @@ function createWindow() {
 }
 
 function sendEngineStatus(status) {
+  engineStatus = status;
   if (mainWindow) {
     mainWindow.webContents.send('engine:status', status);
   }
@@ -130,6 +132,8 @@ function registerIpcHandlers() {
       await shell.openExternal(url);
     }
   });
+
+  ipcMain.handle('engine:get-status', () => engineStatus);
 
   ipcMain.handle('app:get-info', () => ({
     version: app.getVersion(),

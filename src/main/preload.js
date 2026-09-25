@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('deyon', {
   getAppInfo: () => ipcRenderer.invoke('app:get-info'),
   getPathForFile: (file) => webUtils.getPathForFile(file),
 
+  getEngineStatus: () => ipcRenderer.invoke('engine:get-status'),
   onEngineStatus: (callback) => {
     const listener = (_event, status) => callback(status);
     ipcRenderer.on('engine:status', listener);

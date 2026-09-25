@@ -47,6 +47,12 @@ Then open it normally.
 **Windows:** SmartScreen will show "Windows protected your PC." Click
 **More info** → **Run anyway**.
 
+The bundled `aria2c` for macOS is built from Homebrew's current bottle at
+release time, which targets a recent macOS version. If the app won't launch
+on an older macOS, that's why — check `.github/workflows/build.yml`'s run
+log for the exact minimum, or build your own `resources/bin/mac/aria2c` from
+source for older targets.
+
 ## Development
 
 Requires Node.js 20+. On macOS, also install [Homebrew](https://brew.sh) (used

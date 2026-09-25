@@ -78,7 +78,7 @@ $$('[data-external]').forEach((el) => {
 });
 
 // ---------- Engine status ----------
-window.deyon.onEngineStatus((status) => {
+function applyEngineStatus(status) {
   const dot = $('#engine-dot');
   const text = $('#engine-text');
   dot.classList.remove('ready', 'error');
@@ -95,7 +95,13 @@ window.deyon.onEngineStatus((status) => {
     dot.classList.add('error');
     text.textContent = `Engine error: ${status.message}`;
   }
-});
+}
+
+window.deyon.onEngineStatus(applyEngineStatus);
+// The main process may have sent its first status before this listener was
+// registered (webContents.send drops with no listener), so pull current
+// state explicitly once on load.
+window.deyon.getEngineStatus().then(applyEngineStatus);
 
 // ---------- Tabs ----------
 $$('.tab').forEach((tab) => {
@@ -152,6 +158,8 @@ function classify(item) {
   return 'stopped'; // complete / removed
 }
 
+const rowElements = new Map(); // gid -> row element
+
 function renderList(snapshot) {
   const all = [...snapshot.active, ...snapshot.waiting, ...snapshot.stopped];
   let items = all;
@@ -164,76 +172,130 @@ function renderList(snapshot) {
   const empty = $('#empty-state');
 
   if (items.length === 0) {
-    list.querySelectorAll('.row').forEach((r) => r.remove());
+    for (const el of rowElements.values()) el.remove();
+    rowElements.clear();
     empty.style.display = 'flex';
     return;
   }
   empty.style.display = 'none';
-  list.querySelectorAll('.row').forEach((r) => r.remove());
 
+  const seen = new Set();
   for (const item of items) {
-    list.appendChild(renderRow(item));
+    seen.add(item.gid);
+    let row = rowElements.get(item.gid);
+    if (!row) {
+      row = createRow(item);
+      rowElements.set(item.gid, row);
+    }
+    updateRow(row, item);
+    list.appendChild(row); // moves existing nodes into order; doesn't recreate them
+  }
+  for (const [gid, el] of rowElements) {
+    if (!seen.has(gid)) {
+      el.remove();
+      rowElements.delete(gid);
+    }
   }
 }
 
-function renderRow(item) {
-  const row = document.createElement('div');
-  row.className = `row${item.status === 'error' ? ' status-error' : ''}`;
+function withErrorToast(fn) {
+  return async (...args) => {
+    try {
+      await fn(...args);
+    } catch (err) {
+      showToast(`Action failed: ${err.message}`, true);
+    }
+  };
+}
 
+function createRow(item) {
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.innerHTML = `
+    <div class="row-name"></div>
+    <div class="row-actions"></div>
+    <div class="row-meta"></div>
+    <div class="row-progress"><div class="row-progress-fill"></div></div>
+  `;
+  row.dataset.gid = item.gid;
+  row.dataset.status = '';
+  return row;
+}
+
+function updateRow(row, item) {
   const total = Number(item.totalLength) || 0;
   const completed = Number(item.completedLength) || 0;
   const pct = total > 0 ? Math.min(100, (completed / total) * 100) : (item.status === 'complete' ? 100 : 0);
   const speed = Number(item.downloadSpeed) || 0;
-
   const name = downloadName(item);
   const statusLabel = {
     active: 'Downloading', waiting: 'Queued', paused: 'Paused',
     complete: 'Completed', error: 'Error', removed: 'Removed'
   }[item.status] || item.status;
 
-  row.innerHTML = `
-    <div class="row-name" title="${escapeHtml(name)}">${escapeHtml(name)}</div>
-    <div class="row-actions"></div>
-    <div class="row-meta">
-      <span>${statusLabel}</span>
-      <span>${fmtBytes(completed)} / ${total ? fmtBytes(total) : '?'}</span>
-      ${item.status === 'active' ? `<span>${fmtSpeed(speed)}</span><span>ETA ${fmtEta(total - completed, speed)}</span>` : ''}
-      ${item.status === 'error' ? `<span title="${escapeHtml(item.errorMessage || '')}">Error ${item.errorCode || ''}: ${escapeHtml(item.errorMessage || '')}</span>` : ''}
-    </div>
-    <div class="row-progress"><div class="row-progress-fill${item.status === 'complete' ? ' done' : ''}${item.status === 'error' ? ' error' : ''}" style="width:${pct}%"></div></div>
-  `;
+  row.classList.toggle('status-error', item.status === 'error');
 
-  const actions = row.querySelector('.row-actions');
-  actions.appendChild(actionButton('folder', 'Open folder', () => {
+  const nameEl = row.querySelector('.row-name');
+  if (nameEl.textContent !== name) {
+    nameEl.textContent = name;
+    nameEl.title = name;
+  }
+
+  const metaParts = [statusLabel, `${fmtBytes(completed)} / ${total ? fmtBytes(total) : '?'}`];
+  if (item.status === 'active') {
+    metaParts.push(fmtSpeed(speed), `ETA ${fmtEta(total - completed, speed)}`);
+  }
+  if (item.status === 'error') {
+    metaParts.push(`Error ${item.errorCode || ''}: ${item.errorMessage || ''}`);
+  }
+  row.querySelector('.row-meta').textContent = metaParts.join('  ·  ');
+
+  const fill = row.querySelector('.row-progress-fill');
+  fill.style.width = `${pct}%`;
+  fill.classList.toggle('done', item.status === 'complete');
+  fill.classList.toggle('error', item.status === 'error');
+
+  // Only rebuild the action buttons when the status actually changes, so an
+  // in-flight click isn't invalidated by an unrelated poll tick.
+  if (row.dataset.status !== item.status) {
+    row.dataset.status = item.status;
+    row.querySelector('.row-actions').replaceChildren(...buildActions(item));
+  }
+}
+
+function buildActions(item) {
+  const buttons = [];
+
+  buttons.push(actionButton('folder', 'Open folder', withErrorToast(async () => {
     const f = item.files && item.files[0];
     if (f && f.path) window.deyon.showInFolder(f.path);
-  }));
+  })));
 
   if (item.status === 'active') {
-    actions.appendChild(actionButton('pause', 'Pause', async () => {
+    buttons.push(actionButton('pause', 'Pause', withErrorToast(async () => {
       await window.deyon.aria2Call('pause', [item.gid]);
       poll();
-    }));
-  } else if (item.status === 'paused' || item.status === 'waiting') {
-    actions.appendChild(actionButton('play', 'Resume', async () => {
+    })));
+  } else if (item.status === 'paused') {
+    buttons.push(actionButton('play', 'Resume', withErrorToast(async () => {
       await window.deyon.aria2Call('unpause', [item.gid]);
       poll();
-    }));
+    })));
   }
 
   if (item.status === 'active' || item.status === 'paused' || item.status === 'waiting') {
-    actions.appendChild(actionButton('remove', 'Remove', async () => {
+    buttons.push(actionButton('remove', 'Remove', withErrorToast(async () => {
       await window.deyon.aria2Call('remove', [item.gid]);
       poll();
-    }));
+    })));
   } else {
-    actions.appendChild(actionButton('remove', 'Clear', async () => {
+    buttons.push(actionButton('remove', 'Clear', withErrorToast(async () => {
       await window.deyon.aria2Call('removeDownloadResult', [item.gid]);
       poll();
-    }));
+    })));
   }
 
-  return row;
+  return buttons;
 }
 
 function actionButton(kind, title, onClick) {

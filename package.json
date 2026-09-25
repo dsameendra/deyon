@@ -1,7 +1,7 @@
 {
   "name": "deyon",
   "productName": "Deyon",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A cross-platform download manager GUI built on top of aria2",
   "main": "src/main/main.js",
   "author": "dsameendra",
@@ -51,6 +51,7 @@
         ]
       }
     ],
+    "afterSign": "scripts/afterSign.js",
     "mac": {
       "category": "public.app-category.utilities",
       "target": [
@@ -68,7 +69,8 @@
         }
       ],
       "hardenedRuntime": false,
-      "gatekeeperAssess": false
+      "gatekeeperAssess": false,
+      "identity": null
     },
     "win": {
       "target": [
